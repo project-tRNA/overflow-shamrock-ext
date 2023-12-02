@@ -25,6 +25,11 @@ repositories {
 
 mirai {
     noTestCore = true
+    setupConsoleTestRuntime {
+        classpath = classpath.filter {
+            !it.nameWithoutExtension.startsWith("mirai-core-jvm")
+        }
+    }
 }
 
 dependencies {
@@ -32,5 +37,5 @@ dependencies {
     compileOnly("net.mamoe:mirai-core-utils:2.16.0")
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
 
-    testImplementation("top.mrxiaom:overflow-core:2.16.0")
+    testConsoleRuntime("top.mrxiaom:overflow-core:2.16.0")
 }
