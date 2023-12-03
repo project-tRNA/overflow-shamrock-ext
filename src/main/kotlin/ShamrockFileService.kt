@@ -25,7 +25,7 @@ class ShamrockFileService : FileService {
         val resultString = client.execute(post).entity.content.readBytes().toString(Charsets.UTF_8)
         val result = Json.decodeFromString(ShamrockFile.serializer(), resultString)
         file.delete()
-        return result.file
+        return "file:///${result.file.removePrefix("/")}"
     }
     @Serializable
     data class ShamrockFile (
