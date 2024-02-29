@@ -3,6 +3,8 @@ package top.mrxiaom.overflow.shamrock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import net.mamoe.mirai.utils.ExternalResource
 import net.mamoe.mirai.utils.Services
 import org.apache.http.HttpEntity
@@ -13,37 +15,67 @@ import org.apache.http.entity.mime.MultipartEntityBuilder
 import org.apache.http.impl.client.HttpClients
 import org.apache.http.util.EntityUtils
 import top.mrxiaom.overflow.spi.FileService
-import java.io.File
 import java.util.*
 
 class ShamrockFileService : FileService {
     override val priority: Int = 900
     override suspend fun upload(res: ExternalResource): String {
-        if (!tempFolder.exists()) tempFolder.mkdirs()
+        OverflowShamrockExt.logger.debug("正在上传 ${res.formatName} 文件")
         val bytes = res.inputStream().use { it.readBytes() }
-        return HttpClients.createDefault().use {
-            val post = HttpPost("${url.removeSuffix("/")}/upload_file").apply {
-                entity = buildMultipartEntity {
-                    addBinaryBody("file", bytes, ContentType.create(res.mimeType), "${UUID.randomUUID()}.${res.formatName}")
-                    setMode(HttpMultipartMode.BROWSER_COMPATIBLE)
-                    setCharset(Charsets.UTF_8)
+        return runCatching {
+            HttpClients.createDefault().use {
+                val post = HttpPost("${url.removeSuffix("/")}/upload_file").apply {
+                    entity = buildMultipartEntity {
+                        addBinaryBody(
+                            "file",
+                            bytes,
+                            ContentType.create(res.mimeType),
+                            "${UUID.randomUUID()}.${res.formatName}"
+                        )
+                        setMode(HttpMultipartMode.BROWSER_COMPATIBLE)
+                        setCharset(Charsets.UTF_8)
+                    }
+                }
+                it.execute(post).use { resp ->
+                    val resultString = EntityUtils.toString(resp.entity, Charsets.UTF_8)
+                    val result = json.decodeFromString(ShamrockResponse.serializer(), resultString)
+                    if (result.retCode == 0) {
+                        val file = result.file()
+                        "file:///${file.file.removePrefix("/")}"
+                    } else throw IllegalStateException("message=${result.message}, retCode=${result.retCode}")
                 }
             }
-            it.execute(post).use { resp ->
-                val resultString = EntityUtils.toString(resp.entity, Charsets.UTF_8)
-                val result = Json.decodeFromString(ShamrockFile.serializer(), resultString)
-                "file:///${result.file.removePrefix("/")}"
-            }
+        }.onFailure {
+            OverflowShamrockExt.logger.warning("上传 ${res.formatName} 文件时出错", it)
+        }.getOrElse { "" }
+    }
+    @Serializable
+    data class ShamrockResponse (
+        @SerialName("status")
+        val status: String,
+        @SerialName("retcode")
+        val retCode: Int,
+        @SerialName("data")
+        val data: JsonElement,
+        @SerialName("message")
+        val message: String,
+        @SerialName("echo")
+        val echo: JsonElement
+    ) {
+        fun file(): ShamrockFile {
+            return json.decodeFromJsonElement(data)
         }
     }
     @Serializable
     data class ShamrockFile (
         @SerialName("file")
-        val file: String
+        val file: String,
+        @SerialName("md5")
+        val md5: String
     )
 
     companion object {
-        var tempFolder = File(".temp")
+        private val json = Json { ignoreUnknownKeys = true }
         @JvmStatic
         var url: String = "http://127.0.0.1:5700"
         @JvmStatic

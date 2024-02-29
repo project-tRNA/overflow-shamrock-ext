@@ -19,11 +19,6 @@ object OverflowShamrockExt : KotlinPlugin(
 ) {
     override fun PluginComponentStorage.onLoad() {
         reloadConfig()
-        ShamrockFileService.tempFolder = dataFolder
-        if (dataFolder.exists()) {
-            dataFolder.deleteRecursively()
-            dataFolder.mkdirs()
-        }
         ShamrockFileService.register()
         logger.info("已注册 Shamrock 文件服务")
     }
